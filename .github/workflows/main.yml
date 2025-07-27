@@ -1,3 +1,4 @@
+# .github/workflows/download-mp3.yml
 name: Download and Upload MP3
 
 on:
@@ -19,13 +20,17 @@ jobs:
       - name: Download MP3
         run: |
           echo "Downloading MP3 from ${{ github.event.inputs.mp3_url }}..."
-          curl -L "${{ github.event.inputs.mp3_url }}" --fail --show-error --output downloaded.mp3
+          curl -L \
+            -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" \
+            -e "https://downloadx.getuploader.com/" \
+            --fail --show-error \
+            --output downloaded.mp3 \
+            "${{ github.event.inputs.mp3_url }}"
 
       - name: List downloaded files
         run: ls -lh downloaded.mp3
 
       - name: Upload MP3 as artifact
-        # ↓ v4 へアップデート
         uses: actions/upload-artifact@v4
         with:
           name: downloaded-mp3
