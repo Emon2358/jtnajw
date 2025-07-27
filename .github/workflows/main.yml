@@ -4,7 +4,7 @@ name: Glitch with frei0r + FFglitch
 on:
   push:
     branches: [main]
-  workflow_dispatch:
+  workflow_dispatch: {}  # ← 手動実行を有効化
 
 jobs:
   glitch:
@@ -17,13 +17,16 @@ jobs:
       - name: Install ffmpeg and frei0r plugins
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg frei0r-plugins
+          sudo apt-get install -y ffmpeg frei0r-plugins unzip
 
       - name: Download and extract FFglitch binary
         run: |
           wget https://ffglitch.org/pub/bin/linux64/ffglitch-0.10.2-linux-x86_64.zip -O ffglitch.zip
           unzip ffglitch.zip -d ffglitch
-          chmod +x ffglitch/ffglitch
+          # ワイルドカードで中の実行ファイルすべてに実行権限を付与
+          chmod +x ffglitch/ffglitch-0.10.2-linux-x86_64/fflive \
+                    ffglitch/ffglitch-0.10.2-linux-x86_64/ffgac \
+                    ffglitch/ffglitch-0.10.2-linux-x86_64/ffedit
 
       - name: Create output directory
         run: mkdir -p processed_videos
@@ -36,8 +39,10 @@ jobs:
             ffmpeg -y -i "$file" \
               -vf "frei0r=invert0r:1.0,frei0r=glitch0r:0.5" \
               -c:a copy "temp_${base}.mp4"
-            # Step2: FFglitch のコマンドライン版 ffgac（または ffedit）でバイナリ破壊処理
-            ffglitch/ffglitch -i "temp_${base}.mp4" -o "processed_videos/${base}_ffglitch.mp4" \
+            # Step2: FFglitch の ffgac バイナリで破壊的処理
+            ffglitch/ffglitch-0.10.2-linux-x86_64/ffgac \
+              -i "temp_${base}.mp4" \
+              -o "processed_videos/${base}_ffglitch.mp4" \
               --mode random --intensity 0.7
           done
 
