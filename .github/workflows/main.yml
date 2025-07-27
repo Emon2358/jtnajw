@@ -1,37 +1,59 @@
-# .github/workflows/download-mp3.yml
-name: Download and Upload MP3
+# .github/workflows/glitch-video.yml
+name: Glitch with frei0r + FFglitch
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
-    inputs:
-      mp3_url:
-        description: 'ダウンロードする MP3 の URL'
-        required: true
-        default: 'https://example.com/sample.mp3'
 
 jobs:
-  download_and_upload:
+  glitch:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Download MP3
+      - name: Install ffmpeg and frei0r plugins
         run: |
-          echo "Downloading MP3 from ${{ github.event.inputs.mp3_url }}..."
-          curl -L \
-            -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" \
-            -e "https://downloadx.getuploader.com/" \
-            --fail --show-error \
-            --output downloaded.mp3 \
-            "${{ github.event.inputs.mp3_url }}"
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg frei0r-plugins
 
-      - name: List downloaded files
-        run: ls -lh downloaded.mp3
+      - name: Download and extract FFglitch binary
+        run: |
+          wget https://ffglitch.org/pub/bin/linux64/ffglitch-0.10.2-linux-x86_64.zip -O ffglitch.zip
+          unzip ffglitch.zip -d ffglitch
+          chmod +x ffglitch/ffglitch
 
-      - name: Upload MP3 as artifact
-        uses: actions/upload-artifact@v4
+      - name: Create output directory
+        run: mkdir -p processed_videos
+
+      - name: Process videos with frei0r + FFglitch
+        run: |
+          for file in ./videos/*.mp4; do
+            base=$(basename "$file" .mp4)
+            # Step1: frei0r フィルターで色反転＋歪み
+            ffmpeg -y -i "$file" \
+              -vf "frei0r=invert0r:1.0,frei0r=glitch0r:0.5" \
+              -c:a copy "temp_${base}.mp4"
+            # Step2: FFglitch のコマンドライン版 ffgac（または ffedit）でバイナリ破壊処理
+            ffglitch/ffglitch -i "temp_${base}.mp4" -o "processed_videos/${base}_ffglitch.mp4" \
+              --mode random --intensity 0.7
+          done
+
+      - name: Create or update Release
+        uses: softprops/action-gh-release@v1
         with:
-          name: downloaded-mp3
-          path: downloaded.mp3
+          tag_name: glitch-v${{ github.run_number }}
+          name: "Glitched Videos v${{ github.run_number }}"
+          body: |
+            Applied frei0r filters (invert0r, glitch0r) plus FFglitch binary distortion
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload glitched videos
+        uses: softprops/action-gh-release@v1
+        with:
+          files: processed_videos/*.mp4
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
