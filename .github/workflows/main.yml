@@ -4,7 +4,7 @@ name: Glitch with frei0r + FFglitch
 on:
   push:
     branches: [main]
-  workflow_dispatch: {}  # ← 手動実行を有効化
+  workflow_dispatch: {}  # ← 手動実行トリガー
 
 jobs:
   glitch:
@@ -14,16 +14,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install ffmpeg and frei0r plugins
+      - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg frei0r-plugins unzip
+          sudo apt-get install -y ffmpeg frei0r-plugins unzip wget
 
-      - name: Download and extract FFglitch binary
+      - name: Download and extract FFglitch
         run: |
           wget https://ffglitch.org/pub/bin/linux64/ffglitch-0.10.2-linux-x86_64.zip -O ffglitch.zip
           unzip ffglitch.zip -d ffglitch
-          # ワイルドカードで中の実行ファイルすべてに実行権限を付与
           chmod +x ffglitch/ffglitch-0.10.2-linux-x86_64/fflive \
                     ffglitch/ffglitch-0.10.2-linux-x86_64/ffgac \
                     ffglitch/ffglitch-0.10.2-linux-x86_64/ffedit
@@ -35,15 +34,16 @@ jobs:
         run: |
           for file in ./videos/*.mp4; do
             base=$(basename "$file" .mp4)
-            # Step1: frei0r フィルターで色反転＋歪み
+            # 1. frei0rフィルターで色反転＋歪み
             ffmpeg -y -i "$file" \
               -vf "frei0r=invert0r:1.0,frei0r=glitch0r:0.5" \
               -c:a copy "temp_${base}.mp4"
-            # Step2: FFglitch の ffgac バイナリで破壊的処理
+            # 2. ffgacでバイナリ破壊（出力ファイルは末尾にポジショナル指定）
             ffglitch/ffglitch-0.10.2-linux-x86_64/ffgac \
               -i "temp_${base}.mp4" \
-              -o "processed_videos/${base}_ffglitch.mp4" \
-              --mode random --intensity 0.7
+              --mode random \
+              --intensity 0.7 \
+              "processed_videos/${base}_ffglitch.mp4"
           done
 
       - name: Create or update Release
