@@ -1,0 +1,36 @@
+name: Download and Upload MP3
+
+# 手動トリガー（必要に応じて push や schedule などに変更できます）
+on:
+  workflow_dispatch:
+    inputs:
+      mp3_url:
+        description: 'ダウンロードする MP3 の URL'
+        required: true
+        default: 'https://example.com/sample.mp3'
+
+jobs:
+  download_and_upload:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. リポジトリをチェックアウト（今回は不要ですが、他ステップでファイル操作が必要な場合に備えて入れています）
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. curl を使って MP3 をダウンロード
+      - name: Download MP3
+        run: |
+          echo "Downloading MP3 from ${{ github.event.inputs.mp3_url }}..."
+          curl -L "${{ github.event.inputs.mp3_url }}" --fail --show-error --output downloaded.mp3
+
+      # 3. ダウンロードしたファイルを一覧表示（デバッグ用）
+      - name: List downloaded files
+        run: ls -lh downloaded.mp3
+
+      # 4. アーティファクトとしてアップロード
+      - name: Upload MP3 as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: downloaded-mp3
+          path: downloaded.mp3
