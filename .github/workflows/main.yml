@@ -4,7 +4,10 @@ name: Glitch with frei0r + FFglitch
 on:
   push:
     branches: [main]
-  workflow_dispatch: {}  # ← 手動トリガー
+  workflow_dispatch: {}  # 手動実行トリガー
+
+permissions:
+  contents: write  # タグのプッシュとリリース作成に必要
 
 jobs:
   glitch:
@@ -13,6 +16,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # タグの作成・プッシュにフル履歴が必要
 
       - name: Install dependencies
         run: |
@@ -34,13 +39,9 @@ jobs:
         run: |
           for file in ./videos/*.mp4; do
             base=$(basename "$file" .mp4)
-
-            # 1) frei0r フィルターでビジュアルグリッチ
             ffmpeg -y -i "$file" \
               -vf "frei0r=invert0r:1.0,frei0r=glitch0r:0.5" \
               -c:a copy "temp_${base}.mp4"
-
-            # 2) ffgac でモーションベクターを強制出力 → 再エンコードによるグリッチ効果
             ffglitch/ffglitch-0.10.2-linux-x86_64/ffgac \
               -i "temp_${base}.mp4" \
               -an \
@@ -51,18 +52,26 @@ jobs:
               -vcodec mpeg2video \
               -f rawvideo \
               -y "processed_videos/${base}_ffglitch.mp4"
-              # ↑ motion vector を無理やり書き込み、ランダム化されたデータ破壊が起きやすくなる [oai_citation:0‡FFglitch](https://ffglitch.org/2020/07/mv.html?utm_source=chatgpt.com)
-
           done
 
-      - name: Create or update Release
+      - name: Create and push git tag
+        run: |
+          TAG="glitch-v${{ github.run_number }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag $TAG
+          git push origin $TAG
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: glitch-v${{ github.run_number }}
           name: "Glitched Videos v${{ github.run_number }}"
           body: |
             • frei0r フィルターによる色反転＋グリッチ  
-            • FFglitch(ffgac) によるモーションベクター強制 & 再エンコード  
+            • FFglitch(ffgac) によるモーションベクター強制 & 再エンコード
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
