@@ -4,7 +4,7 @@ name: Glitch with frei0r + FFglitch
 on:
   push:
     branches: [main]
-  workflow_dispatch: {}  # ← 手動実行トリガー
+  workflow_dispatch: {}  # ← 手動トリガー
 
 jobs:
   glitch:
@@ -34,16 +34,25 @@ jobs:
         run: |
           for file in ./videos/*.mp4; do
             base=$(basename "$file" .mp4)
-            # 1. frei0rフィルターで色反転＋歪み
+
+            # 1) frei0r フィルターでビジュアルグリッチ
             ffmpeg -y -i "$file" \
               -vf "frei0r=invert0r:1.0,frei0r=glitch0r:0.5" \
               -c:a copy "temp_${base}.mp4"
-            # 2. ffgacでバイナリ破壊（出力ファイルは末尾にポジショナル指定）
+
+            # 2) ffgac でモーションベクターを強制出力 → 再エンコードによるグリッチ効果
             ffglitch/ffglitch-0.10.2-linux-x86_64/ffgac \
               -i "temp_${base}.mp4" \
-              --mode random \
-              --intensity 0.7 \
-              "processed_videos/${base}_ffglitch.mp4"
+              -an \
+              -mpv_flags +nopimb+forcemv \
+              -qscale:v 0 \
+              -g max \
+              -sc_threshold max \
+              -vcodec mpeg2video \
+              -f rawvideo \
+              -y "processed_videos/${base}_ffglitch.mp4"
+              # ↑ motion vector を無理やり書き込み、ランダム化されたデータ破壊が起きやすくなる [oai_citation:0‡FFglitch](https://ffglitch.org/2020/07/mv.html?utm_source=chatgpt.com)
+
           done
 
       - name: Create or update Release
@@ -52,7 +61,8 @@ jobs:
           tag_name: glitch-v${{ github.run_number }}
           name: "Glitched Videos v${{ github.run_number }}"
           body: |
-            Applied frei0r filters (invert0r, glitch0r) plus FFglitch binary distortion
+            • frei0r フィルターによる色反転＋グリッチ  
+            • FFglitch(ffgac) によるモーションベクター強制 & 再エンコード  
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
